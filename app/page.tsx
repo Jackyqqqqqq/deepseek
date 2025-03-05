@@ -34,10 +34,14 @@ export default function Home() {
       }
 
       setGeneratedCode(data.code);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: unknown) {
       console.error('Error details:', err);
-      setError(err.message || '生成代码时发生错误?');
+      // 正确处理 unknown 类型
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('生成代码时发生错误');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -48,7 +52,7 @@ export default function Home() {
       <div className="max-w-4xl mx-auto">
         <Card>
           <CardHeader>
-            <CardTitle>AI代码生成器?</CardTitle>
+            <CardTitle>AI代码生成器</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -87,7 +91,7 @@ export default function Home() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  生成中?...
+                  生成中...
                 </>
               ) : (
                 '生成代码'
@@ -103,7 +107,7 @@ export default function Home() {
             {generatedCode && (
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  生成的代码?
+                  生成的代码
                 </label>
                 <pre className="bg-gray-100 p-4 rounded-md overflow-x-auto">
                   <code>{generatedCode}</code>
