@@ -2,19 +2,26 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 
-// API密钥配置
-const API_KEY = process.env.DEEPSEEK_API_KEY;
-const API_BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
-
 export async function POST(request: Request) {
   try {
-    const { description, language } = await request.json();
+    // 解析请求体
+    let reqBody;
+    try {
+      reqBody = await request.json();
+    } catch (e) {
+      return NextResponse.json({ error: '无效的请求数据' }, { status: 400 });
+    }
+    
+    const { description, language } = reqBody;
     
     if (!description) {
-      return NextResponse.json(
-        { error: '请提供代码描述' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '请提供代码描述' }, { status: 400 });
+    }
+    
+    const API_KEY = process.env.DEEPSEEK_API_KEY;
+    if (!API_KEY) {
+      console.error('未配置API密钥');
+      return NextResponse.json({ error: 'API配置错误' }, { status: 500 });
     }
     
     // 准备请求数据
@@ -26,52 +33,56 @@ export async function POST(request: Request) {
       }],
       max_tokens: 5000,
       temperature: 0.2,
-      top_p: 1.0,
-      frequency_penalty: 0.0,
-      presence_penalty: 0.0
+      top_p: 1.0
     };
     
-    // 发送请求到DeepSeek API
+    // 使用较短的超时时间
     const response = await axios({
       method: 'post',
-      url: API_BASE_URL,
+      url: 'https://api.deepseek.com/v1/chat/completions',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${API_KEY}`
       },
       data: requestData,
+      timeout: 8000, // 8秒超时，给Vercel留出处理时间
       validateStatus: () => true // 允许所有状态码
     });
     
-    // 记录响应信息以便调试
-    console.log('API Response:', {
-      status: response.status,
-      headers: response.headers,
-      data: response.data
-    });
-    
-    // 检查响应状态
+    // 处理错误响应
     if (response.status !== 200) {
-      throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+      let errorMsg = '与AI服务通信时出错';
+      
+      // 安全地提取错误消息
+      if (response.data && typeof response.data === 'object') {
+        if (response.data.error && response.data.error.message) {
+          errorMsg = response.data.error.message;
+        } else if (response.data.message) {
+          errorMsg = response.data.message;
+        }
+      }
+      
+      return NextResponse.json({ 
+        error: errorMsg,
+        status: response.status
+      }, { status: 500 });
     }
     
     // 验证并返回数据
-    if (response.data && response.data.choices && response.data.choices[0]) {
+    if (response.data?.choices?.[0]?.message?.content) {
       return NextResponse.json({
         code: response.data.choices[0].message.content.trim()
       });
     } else {
-      throw new Error('API返回的数据格式不正确');
+      return NextResponse.json({ error: 'API返回的数据格式不正确' }, { status: 500 });
     }
   } catch (error: any) {
-    console.error('Error details:', error);
+    // 确保返回有效的JSON响应
+    let errorMessage = '生成代码时发生错误';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
     
-    return NextResponse.json(
-      { 
-        error: '生成代码时发生错误',
-        details: error.message || '未知错误'
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
