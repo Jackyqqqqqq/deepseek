@@ -2,13 +2,18 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 
+export const config = {
+  maxDuration: 30, // Extend Vercel function timeout if possible
+};
+
 export async function POST(request: Request) {
   try {
-    // 解析请求体
+    // Parse request body
     let reqBody;
     try {
       reqBody = await request.json();
     } catch (e) {
+      console.error('Failed to parse request JSON:', e);
       return NextResponse.json({ error: '无效的请求数据' }, { status: 400 });
     }
     
@@ -18,13 +23,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '请提供代码描述' }, { status: 400 });
     }
     
+    // Use environment variable for API key
     const API_KEY = process.env.DEEPSEEK_API_KEY;
     if (!API_KEY) {
       console.error('未配置API密钥');
       return NextResponse.json({ error: 'API配置错误' }, { status: 500 });
     }
     
-    // 准备请求数据
+    console.log(`Processing request for language: ${language}, description length: ${description.length}`);
+    
+    // Prepare request data
     const requestData = {
       model: "deepseek-reasoner",
       messages: [{
@@ -36,7 +44,7 @@ export async function POST(request: Request) {
       top_p: 1.0
     };
     
-    // 使用较短的超时时间
+    // Use a longer timeout
     const response = await axios({
       method: 'post',
       url: 'https://api.deepseek.com/v1/chat/completions',
@@ -45,15 +53,19 @@ export async function POST(request: Request) {
         'Authorization': `Bearer ${API_KEY}`
       },
       data: requestData,
-      timeout: 8000, // 8秒超时，给Vercel留出处理时间
-      validateStatus: () => true // 允许所有状态码
+      timeout: 25000, // Increased timeout
+      validateStatus: () => true // Allow all status codes
     });
     
-    // 处理错误响应
+    console.log(`API response status: ${response.status}`);
+    
+    // Handle error responses
     if (response.status !== 200) {
       let errorMsg = '与AI服务通信时出错';
       
-      // 安全地提取错误消息
+      console.error('API error:', response.status, response.data);
+      
+      // Safely extract error message
       if (response.data && typeof response.data === 'object') {
         if (response.data.error && response.data.error.message) {
           errorMsg = response.data.error.message;
@@ -68,18 +80,26 @@ export async function POST(request: Request) {
       }, { status: 500 });
     }
     
-    // 验证并返回数据
+    // Validate and return data
     if (response.data?.choices?.[0]?.message?.content) {
+      const generatedCode = response.data.choices[0].message.content.trim();
+      console.log('Successfully generated code');
       return NextResponse.json({
-        code: response.data.choices[0].message.content.trim()
+        code: generatedCode
       });
     } else {
+      console.error('Invalid API response format:', response.data);
       return NextResponse.json({ error: 'API返回的数据格式不正确' }, { status: 500 });
     }
   } catch (error: any) {
-    // 确保返回有效的JSON响应
+    // Ensure valid JSON response
     let errorMessage = '生成代码时发生错误';
-    if (error instanceof Error) {
+    
+    console.error('Unhandled error:', error);
+    
+    if (error.name === 'AxiosError' && error.code === 'ECONNABORTED') {
+      errorMessage = '请求超时，请稍后再试或简化您的请求';
+    } else if (error instanceof Error) {
       errorMessage = error.message;
     }
     
