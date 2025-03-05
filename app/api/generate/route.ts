@@ -53,7 +53,7 @@ export async function POST(request: Request) {
         'Authorization': `Bearer ${API_KEY}`
       },
       data: requestData,
-      timeout: 25000, // Increased timeout
+      timeout: 2500000, // Increased timeout
       validateStatus: () => true // Allow all status codes
     });
     
