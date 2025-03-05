@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import axios from 'axios';
 
 export const config = {
-  maxDuration: 30, // Extend Vercel function timeout if possible
+  maxDuration: 300000, // Extend Vercel function timeout if possible
 };
 
 export async function POST(request: Request) {
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
         role: "user",
         content: `Generate a ${language} function that ${description}. Please only return the code without any explanation.`
       }],
-      max_tokens: 5000,
+      max_tokens: 1000,
       temperature: 0.2,
       top_p: 1.0
     };
